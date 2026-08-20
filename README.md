@@ -54,6 +54,35 @@ propose → vote → queue → execute lifecycle (both a governed external call 
 treasury transfer), quorum-not-met defeat, below-threshold proposal revert,
 direct-call authorization, and the full fee surface.
 
+## Deep dive (v2): hardening + full lifecycle/adversarial coverage
+
+A second pass audited the role wiring, the OZ v5 Governor override set, clock-mode
+consistency, quorum arithmetic, and the factory fee surface line by line. The
+wiring proved textbook-correct — the timelock self-administers, the factory
+renounces its temporary admin inside the same `createDao` call, and neither the
+deployer nor any third party retains proposer/canceller/executor power over a
+fresh DAO — so no exploitable bug was found. The work therefore focused on
+turning thin coverage into a deep adversarial suite (16 -> 48 tests):
+
+- **Quorum boundary** — exactly met (succeeds) vs. one vote short (defeated);
+  against-outweighs-for and an exact tie both defeat despite quorum.
+- **Voting integrity** — double-vote / vote-change reverts; propose at threshold
+  succeeds, one below reverts.
+- **Cancel** — proposer-while-pending succeeds; non-proposer and post-Active revert.
+- **Timelock delay** — execute before the delay (and one second short) reverts,
+  after passes; unqueued/defeated proposals cannot be queued or executed; the open
+  executor role lets any address trigger a ready, queued proposal.
+- **Governance-only mutation** — `setVotingDelay` / `updateQuorumNumerator` revert
+  on direct calls and only take effect through a passed proposal via the timelock.
+- **Factory isolation** — two DAOs share no token supply, votes, or records.
+- **Delegation** — no votes until delegated; a re-delegation mid-proposal keeps the
+  original delegatee's snapshot weight and gives the new one none.
+- **Fee surface** — rejecting recipient reverts the deploy, exact-cap allowed,
+  under/over `msg.value` revert, zero-address guards, ownership transfer/renounce.
+
+A mutation check (forcing `quorum()` to `0`) was confirmed to break a quorum test,
+then reverted.
+
 ## License
 
 MIT
