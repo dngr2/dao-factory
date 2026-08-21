@@ -6,14 +6,22 @@ import {TimelockController} from "@openzeppelin/contracts/governance/TimelockCon
 import {IVotes} from "@openzeppelin/contracts/governance/utils/IVotes.sol";
 import {DaoToken} from "./DaoToken.sol";
 import {DaoGovernor} from "./DaoGovernor.sol";
+import {TokenDeployer} from "./TokenDeployer.sol";
+import {GovernorDeployer} from "./GovernorDeployer.sol";
 
 /// @title DaoFactory
 /// @notice One-call deployer for a complete, self-sovereign DAO: a votes-token, a TimelockController,
 ///         and an OpenZeppelin v5 Governor, correctly wired together.
-/// @dev Each deployment charges a bounded flat protocol fee forwarded to `feeRecipient`.
+/// @dev The token and governor are created through external deployer contracts so this factory's own
+///      runtime bytecode stays under the EIP-170 24,576-byte deploy limit. Each deployment charges a
+///      bounded flat protocol fee forwarded to `feeRecipient`.
 contract DaoFactory is Ownable {
     /// @notice Hard ceiling on the protocol fee; the owner can never set a fee above this.
     uint256 public constant MAX_FEE = 0.1 ether;
+
+    /// @notice External deployers holding the token/governor creation bytecode.
+    TokenDeployer public immutable tokenDeployer;
+    GovernorDeployer public immutable governorDeployer;
 
     /// @notice Current flat protocol fee charged per DAO deployment.
     uint256 public fee;
@@ -37,11 +45,24 @@ contract DaoFactory is Ownable {
     event FeeUpdated(uint256 oldFee, uint256 newFee);
     event FeeRecipientUpdated(address oldRecipient, address newRecipient);
 
+    /// @param tokenDeployer_ Deployer holding DaoToken creation code.
+    /// @param governorDeployer_ Deployer holding DaoGovernor creation code.
     /// @param initialFee Starting protocol fee (must be <= MAX_FEE).
     /// @param feeRecipient_ Address that receives protocol fees.
-    constructor(uint256 initialFee, address feeRecipient_) Ownable(msg.sender) {
+    constructor(
+        TokenDeployer tokenDeployer_,
+        GovernorDeployer governorDeployer_,
+        uint256 initialFee,
+        address feeRecipient_
+    ) Ownable(msg.sender) {
+        require(
+            address(tokenDeployer_) != address(0) && address(governorDeployer_) != address(0),
+            "DaoFactory: zero deployer"
+        );
         require(initialFee <= MAX_FEE, "DaoFactory: fee over cap");
         require(feeRecipient_ != address(0), "DaoFactory: recipient is zero");
+        tokenDeployer = tokenDeployer_;
+        governorDeployer = governorDeployer_;
         fee = initialFee;
         feeRecipient = feeRecipient_;
     }
@@ -78,15 +99,15 @@ contract DaoFactory is Ownable {
         require(msg.value == fee, "DaoFactory: wrong fee");
         require(quorumPercent <= 100, "DaoFactory: quorum > 100");
 
-        // 1. Governance token, initial supply minted to the specified holder.
-        DaoToken daoToken = new DaoToken(tokenName, tokenSymbol, initialSupply, initialHolder);
+        // 1. Governance token, initial supply minted to the specified holder (via external deployer).
+        DaoToken daoToken = tokenDeployer.deploy(tokenName, tokenSymbol, initialSupply, initialHolder);
 
         // 2. Timelock. Factory is the temporary admin so it can wire roles, then renounces.
         address[] memory empty = new address[](0);
         TimelockController tl = new TimelockController(timelockDelay, empty, empty, address(this));
 
-        // 3. Governor bound to the token and timelock.
-        DaoGovernor gov = new DaoGovernor(
+        // 3. Governor bound to the token and timelock (via external deployer).
+        DaoGovernor gov = governorDeployer.deploy(
             name, IVotes(address(daoToken)), tl, votingDelay, votingPeriod, proposalThreshold, quorumPercent
         );
 

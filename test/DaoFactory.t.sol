@@ -3,6 +3,8 @@ pragma solidity 0.8.26;
 
 import {Test} from "forge-std/Test.sol";
 import {DaoFactory} from "../src/DaoFactory.sol";
+import {TokenDeployer} from "../src/TokenDeployer.sol";
+import {GovernorDeployer} from "../src/GovernorDeployer.sol";
 import {DaoToken} from "../src/DaoToken.sol";
 import {DaoGovernor} from "../src/DaoGovernor.sol";
 import {TimelockController} from "@openzeppelin/contracts/governance/TimelockController.sol";
@@ -42,7 +44,7 @@ contract DaoFactoryTest is Test {
     uint256 constant PROP_THRESHOLD = 1000 ether;
 
     function setUp() public {
-        factory = new DaoFactory(INITIAL_FEE, feeRecipient);
+        factory = new DaoFactory(new TokenDeployer(), new GovernorDeployer(), INITIAL_FEE, feeRecipient);
     }
 
     // --- helpers ---
@@ -304,8 +306,10 @@ contract DaoFactoryTest is Test {
 
     function test_Fee_CapEnforcedOnConstruct() public {
         uint256 maxFee = factory.MAX_FEE();
+        TokenDeployer td = new TokenDeployer();
+        GovernorDeployer gd = new GovernorDeployer();
         vm.expectRevert("DaoFactory: fee over cap");
-        new DaoFactory(maxFee + 1, feeRecipient);
+        new DaoFactory(td, gd, maxFee + 1, feeRecipient);
     }
 
     function test_Fee_CapEnforcedOnSetFee() public {

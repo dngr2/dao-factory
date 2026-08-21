@@ -3,6 +3,8 @@ pragma solidity 0.8.26;
 
 import {Test} from "forge-std/Test.sol";
 import {DaoFactory} from "../src/DaoFactory.sol";
+import {TokenDeployer} from "../src/TokenDeployer.sol";
+import {GovernorDeployer} from "../src/GovernorDeployer.sol";
 import {DaoToken} from "../src/DaoToken.sol";
 import {DaoGovernor} from "../src/DaoGovernor.sol";
 import {TimelockController} from "@openzeppelin/contracts/governance/TimelockController.sol";
@@ -52,7 +54,7 @@ abstract contract GovernanceBase is Test {
     uint8 constant ABSTAIN = 2;
 
     function setUp() public virtual {
-        factory = new DaoFactory(INITIAL_FEE, feeRecipient);
+        factory = new DaoFactory(new TokenDeployer(), new GovernorDeployer(), INITIAL_FEE, feeRecipient);
     }
 
     function _createDao() internal returns (DaoToken token, TimelockController tl, DaoGovernor gov) {
@@ -601,7 +603,7 @@ contract DaoGovernanceAdversarialTest is GovernanceBase {
     function test_Fee_TransferFailure_Reverts() public {
         // Point the fee at a contract that rejects ETH.
         RejectingRecipient bad = new RejectingRecipient();
-        DaoFactory f = new DaoFactory(INITIAL_FEE, address(bad));
+        DaoFactory f = new DaoFactory(new TokenDeployer(), new GovernorDeployer(), INITIAL_FEE, address(bad));
 
         vm.expectRevert("DaoFactory: fee transfer failed");
         f.createDao{value: INITIAL_FEE}(
@@ -611,7 +613,7 @@ contract DaoGovernanceAdversarialTest is GovernanceBase {
 
     function test_Fee_AtCapExactly_Allowed() public {
         uint256 cap = factory.MAX_FEE();
-        DaoFactory f = new DaoFactory(cap, feeRecipient);
+        DaoFactory f = new DaoFactory(new TokenDeployer(), new GovernorDeployer(), cap, feeRecipient);
         assertEq(f.fee(), cap, "constructed at cap");
     }
 
@@ -627,8 +629,10 @@ contract DaoGovernanceAdversarialTest is GovernanceBase {
     }
 
     function test_Constructor_ZeroRecipient_Reverts() public {
+        TokenDeployer td = new TokenDeployer();
+        GovernorDeployer gd = new GovernorDeployer();
         vm.expectRevert("DaoFactory: recipient is zero");
-        new DaoFactory(INITIAL_FEE, address(0));
+        new DaoFactory(td, gd, INITIAL_FEE, address(0));
     }
 
     function test_SetFeeRecipient_ZeroReverts() public {
