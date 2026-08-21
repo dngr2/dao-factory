@@ -1,3 +1,7 @@
+DaoFactoryInvariants:invariant_everyDaoWiredWithRecordedParams() (runs: 32, calls: 3200, reverts: 0)
+DaoFactoryInvariants:invariant_feesFullyForwardedAndFactoryHoldsNothing() (runs: 32, calls: 3200, reverts: 0)
+DaoFactoryInvariants:invariant_registryCountMatchesCreations() (runs: 32, calls: 3200, reverts: 0)
+DaoFactoryInvariants:invariant_votingPowerEqualsBalanceForDelegated() (runs: 32, calls: 3200, reverts: 0)
 DaoFactoryTest:test_Defeated_WhenQuorumNotMet() (gas: 6449399)
 DaoFactoryTest:test_Deploy_GovernorBoundToTokenAndTimelock() (gas: 6178016)
 DaoFactoryTest:test_Deploy_IndexedAndCounted() (gas: 6166355)
